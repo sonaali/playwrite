@@ -21,7 +21,7 @@ import * as events from './events';
 
 export type TestServerSocket = Pick<WebSocket, 'addEventListener' | 'send' | 'close'>;
 
-abstract class TestServerConnection implements TestServerInterface, TestServerInterfaceEvents {
+export class TestServerConnection implements TestServerInterface, TestServerInterfaceEvents {
   readonly onClose: events.Event<void>;
   readonly onReport: events.Event<any>;
   readonly onStdio: events.Event<{ type: 'stderr' | 'stdout'; text?: string | undefined; buffer?: string | undefined; }>;

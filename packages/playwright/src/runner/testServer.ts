@@ -57,12 +57,12 @@ class TestServer {
   }
 
   async stop() {
-    await this._dispatcher?._setInterceptStdio(false);
+    this._dispatcher?._setInterceptStdio(false);
     await this._dispatcher?.runGlobalTeardown();
   }
 }
 
-class TestServerDispatcher implements TestServerInterface {
+export class TestServerDispatcher implements TestServerInterface {
   private _configLocation: ConfigLocation;
 
   private _watcher: Watcher;
@@ -119,7 +119,7 @@ class TestServerDispatcher implements TestServerInterface {
     if (params.closeOnDisconnect)
       this._closeOnDisconnect = true;
     if (params.interceptStdio)
-      await this._setInterceptStdio(true);
+      this._setInterceptStdio(true);
     if (params.watchTestDirs)
       this._watchTestDirs = true;
   }
@@ -392,7 +392,7 @@ class TestServerDispatcher implements TestServerInterface {
     await this._testRun?.run;
   }
 
-  async _setInterceptStdio(intercept: boolean) {
+  _setInterceptStdio(intercept: boolean) {
     if (process.env.PWTEST_DEBUG)
       return;
     if (intercept) {
