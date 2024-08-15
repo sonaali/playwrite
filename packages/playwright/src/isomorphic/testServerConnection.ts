@@ -19,7 +19,15 @@ import * as events from './events';
 
 // -- Reuse boundary -- Everything below this line is reused in the vscode extension.
 
-export type TestServerSocket = Pick<WebSocket, 'addEventListener' | 'send' | 'close'>;
+export interface TestServerSocket {
+  addEventListener(type: 'message', listener: (event: { data: string }) => void): void;
+  addEventListener(type: 'open', listener: () => void): void;
+  addEventListener(type: 'error', listener: () => void): void;
+  addEventListener(type: 'close', listener: () => void): void;
+
+  send(data: string): void;
+  close(): void;
+}
 
 export class TestServerConnection implements TestServerInterface, TestServerInterfaceEvents {
   readonly onClose: events.Event<void>;
@@ -205,11 +213,5 @@ export class TestServerConnection implements TestServerInterface, TestServerInte
       this._socket.close();
     } catch {
     }
-  }
-}
-
-export class WSTestServerConnection extends TestServerConnection {
-  constructor(wsURL: string) {
-    super(new WebSocket(wsURL));
   }
 }

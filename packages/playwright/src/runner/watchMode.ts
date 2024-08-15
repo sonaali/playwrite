@@ -30,8 +30,13 @@ import { EventEmitter } from 'stream';
 import { type TestServerSocket, TestServerConnection } from '../isomorphic/testServerConnection';
 
 class InMemoryServerSocket extends EventEmitter implements TestServerSocket {
-  constructor(public readonly send: (data: any) => void, public readonly close: () => void = () => {}) {
+  public readonly send: (data: string) => void;
+  public readonly close: () => void;
+
+  constructor(send: (data: any) => void,  close: () => void = () => {}) {
     super();
+    this.send = send;
+    this.close = close;
   }
 
   addEventListener(event: string, listener: (e: any) => void) {
@@ -73,17 +78,7 @@ export async function runWatchModeLoop(config: FullConfigInternal): Promise<Full
     }
   });
 
-  const originalStdoutWrite = process.stdout.write;
-  const originalStderrWrite = process.stderr.write;
-  testServerConnection.onStdio(chunk => {
-    const text = chunk.text ?? Buffer.from(chunk.buffer!, 'base64');
-    if (chunk.type === 'stderr')
-      originalStderrWrite.call(process.stderr, text);
-    else
-      originalStdoutWrite.call(process.stdout, text);
-  });
-
-  await testServerConnection.initialize({ interceptStdio: true });
+  await testServerConnection.initialize({ interceptStdio: false });
   await testServerConnection.runGlobalSetup({});
 
   await testServerConnection.listTests({});

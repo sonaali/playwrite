@@ -29,7 +29,7 @@ import type { SourceLocation } from './modelUtil';
 import { testStatusIcon } from './testUtils';
 import type { TestModel } from './uiModeModel';
 import './uiModeTestListView.css';
-import type { WSTestServerConnection } from '@testIsomorphic/testServerConnection';
+import type { TestServerConnection } from '@testIsomorphic/testServerConnection';
 import { TagView } from './tag';
 
 const TestTreeView = TreeView<TreeItem>;
@@ -37,7 +37,7 @@ const TestTreeView = TreeView<TreeItem>;
 export const TestListView: React.FC<{
   filterText: string,
   testTree: TestTree,
-  testServerConnection: WSTestServerConnection | undefined,
+  testServerConnection: TestServerConnection | undefined,
   testModel?: TestModel,
   runTests: (mode: 'bounce-if-busy' | 'queue-if-busy', testIds: Set<string>) => void,
   runningState?: { testIds: Set<string>, itemSelectedByUser?: boolean, completed?: boolean },
