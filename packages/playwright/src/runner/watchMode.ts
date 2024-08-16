@@ -47,6 +47,7 @@ class InMemoryServerSocket extends EventEmitter implements TestServerSocket {
 interface WatchModeOptions {
   files?: string[];
   projects?: string[];
+  grep?: string;
 }
 
 export async function runWatchModeLoop(config: FullConfigInternal, configLocation: ConfigLocation, initialOptions: WatchModeOptions): Promise<FullResult['status']> {
@@ -205,9 +206,9 @@ export async function runWatchModeLoop(config: FullConfigInternal, configLocatio
       if (testPattern === null)
         continue;
       if (testPattern.trim())
-        config.cliGrep = testPattern;
+        options.grep = testPattern;
       else
-        config.cliGrep = undefined;
+        options.grep = undefined;
       await runTests(config, options, testServerConnection);
       lastRun = { type: 'regular' };
       continue;
@@ -215,7 +216,7 @@ export async function runWatchModeLoop(config: FullConfigInternal, configLocatio
 
     if (command === 'failed') {
       const failedTestIds = new Set(failedTestIdCollector);
-      await runTests(config, options, testServerConnection, { title: 'running failed tests', testIds: [...failedTestIds] });
+      await runTests(config, {}, testServerConnection, { title: 'running failed tests', testIds: [...failedTestIds] });
       lastRun = { type: 'failed', failedTestIds };
       continue;
     }
@@ -227,7 +228,7 @@ export async function runWatchModeLoop(config: FullConfigInternal, configLocatio
       } else if (lastRun.type === 'changed') {
         await runChangedTests(config, options, testServerConnection, lastRun.dirtyTestFiles!, 're-running tests');
       } else if (lastRun.type === 'failed') {
-        await runTests(config, options, testServerConnection, { title: 're-running tests', testIds: [...lastRun.failedTestIds!] });
+        await runTests(config, {}, testServerConnection, { title: 're-running tests', testIds: [...lastRun.failedTestIds!] });
       }
       continue;
     }
@@ -277,7 +278,7 @@ async function runTests(config: FullConfigInternal, watchOptions: WatchModeOptio
   printConfiguration(watchOptions, config, options?.title);
 
   await testServerConnection.runTests({
-    grep: config.cliGrep,
+    grep: watchOptions.grep,
     grepInvert: config.cliGrepInvert,
     testIds: options?.testIds,
     locations: watchOptions?.files,
