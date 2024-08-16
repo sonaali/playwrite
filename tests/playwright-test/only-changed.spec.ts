@@ -191,6 +191,7 @@ test('should support watch mode', async ({ git, writeFiles, runWatchTest }) => {
 
   const testProcess = await runWatchTest({}, { 'only-changed': `HEAD~1` });
   await testProcess.waitForOutput('Waiting for file changes.');
+  expect(testProcess.output).toContain('--only-changed HEAD~1');
   testProcess.clearOutput();
   testProcess.write('r');
 

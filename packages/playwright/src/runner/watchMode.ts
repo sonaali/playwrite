@@ -46,6 +46,7 @@ interface WatchModeOptions {
   files?: string[];
   projects?: string[];
   grep?: string;
+  onlyChanged?: string;
 }
 
 export async function runWatchModeLoop(configLocation: ConfigLocation, initialOptions: WatchModeOptions): Promise<FullResult['status']> {
@@ -78,7 +79,7 @@ export async function runWatchModeLoop(configLocation: ConfigLocation, initialOp
     if (changedFiles.length === 0)
       return;
 
-    const { report } = await testServerConnection.listTests({ locations: options.files, projects: options.projects, grep: options.grep });
+    const { report } = await testServerConnection.listTests({ locations: options.files, projects: options.projects, grep: options.grep, onlyChanged: options.onlyChanged });
     const rootDir = report.find(r => r.method === 'onConfigure')!.params.config.rootDir;
     for (const suite of report.find(r => r.method === 'onProject')!.params.project.suites) {
       const suitePath = path.join(rootDir, suite.location.file);
@@ -109,7 +110,7 @@ export async function runWatchModeLoop(configLocation: ConfigLocation, initialOp
   await testServerConnection.initialize({ interceptStdio: false });
   await testServerConnection.runGlobalSetup({});
 
-  await testServerConnection.listTests({});
+  await testServerConnection.listTests({ locations: options.files, projects: options.projects, grep: options.grep, onlyChanged: options.onlyChanged });
   await testServerConnection.watch({ fileNames: [] });
 
   let lastRun: { type: 'changed' | 'regular' | 'failed', failedTestIds?: Set<string>, dirtyTestFiles?: string[] } = { type: 'regular' };
@@ -248,6 +249,7 @@ async function runTests(watchOptions: WatchModeOptions, testServerConnection: Te
     locations: watchOptions?.files,
     files: options?.changedFiles,
     projects: watchOptions.projects,
+    onlyChanged: watchOptions.onlyChanged,
     connectWsEndpoint,
     reuseContext: connectWsEndpoint ? true : undefined,
     workers: connectWsEndpoint ? 1 : undefined,
@@ -326,6 +328,8 @@ function printConfiguration(options: WatchModeOptions, title?: string) {
     tokens.push(...options.projects.map(p => colors.blue(`--project ${p}`)));
   if (options.grep)
     tokens.push(colors.red(`--grep ${options.grep}`));
+  if (options.onlyChanged)
+    tokens.push(colors.yellow(`--only-changed ${options.onlyChanged}`));
   if (options.files)
     tokens.push(...options.files.map(a => colors.bold(a)));
   if (title)
