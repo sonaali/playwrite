@@ -267,13 +267,12 @@ async function runChangedTests(config: FullConfigInternal, watchOptions: WatchMo
   // If there are affected dependency projects, do the full run, respect the original CLI.
   // if there are no affected dependency projects, intersect CLI with dirty files
   const locations = affectsAnyDependency ? undefined : [...testFiles];
-  await runTests(config, watchOptions, testServerConnection, { title: title || 'files changed', locations });
+  await runTests(config, { ...watchOptions, files: locations }, testServerConnection, { title: title || 'files changed' });
 }
 
 async function runTests(config: FullConfigInternal, watchOptions: WatchModeOptions, testServerConnection: TestServerConnection, options?: {
     title?: string,
     testIds?: string[],
-    locations?: string[],
   }) {
   printConfiguration(watchOptions, config, options?.title);
 
@@ -281,7 +280,7 @@ async function runTests(config: FullConfigInternal, watchOptions: WatchModeOptio
     grep: config.cliGrep,
     grepInvert: config.cliGrepInvert,
     testIds: options?.testIds,
-    locations: options?.locations ?? config.cliArgs,
+    locations: watchOptions?.files,
     projects: config.cliProjectFilter,
     connectWsEndpoint,
     reuseContext: connectWsEndpoint ? true : undefined,
@@ -375,8 +374,7 @@ function printConfiguration(options: WatchModeOptions, config: FullConfigInterna
   tokens.push(...(options.projects ?? []).map(p => colors.blue(`--project ${p}`)));
   if (config.cliGrep)
     tokens.push(colors.red(`--grep ${config.cliGrep}`));
-  if (config.cliArgs)
-    tokens.push(...config.cliArgs.map(a => colors.bold(a)));
+  tokens.push(...(options.files ?? []).map(a => colors.bold(a)));
   if (title)
     tokens.push(colors.dim(`(${title})`));
   if (seq)
