@@ -16,7 +16,7 @@
 
 import readline from 'readline';
 import { createGuid, getPackageManagerExecCommand, ManualPromise } from 'playwright-core/lib/utils';
-import type { FullConfigInternal, FullProjectInternal } from '../common/config';
+import type { ConfigLocation, FullConfigInternal, FullProjectInternal } from '../common/config';
 import { createFileMatcher, createFileMatcherFromArguments } from '../util';
 import type { Matcher } from '../util';
 import { buildProjectsClosure, filterProjects } from './projectUtils';
@@ -44,8 +44,15 @@ class InMemoryServerSocket extends EventEmitter implements TestServerSocket {
   }
 }
 
-export async function runWatchModeLoop(config: FullConfigInternal): Promise<FullResult['status']> {
-  const testServerDispatcher = new TestServerDispatcher({ configDir: config.configDir, resolvedConfigFile: config.config.configFile });
+interface WatchModeOptions {
+  files?: string[];
+  projects?: string[];
+}
+
+export async function runWatchModeLoop(configLocation: ConfigLocation, initialOptions: WatchModeOptions): Promise<FullResult['status']> {
+  const options: WatchModeOptions = { ...initialOptions };
+
+  const testServerDispatcher = new TestServerDispatcher(configLocation);
   const inMemorySocket = new InMemoryServerSocket(
       async data => {
         const { id, method, params } = JSON.parse(data);
@@ -66,9 +73,15 @@ export async function runWatchModeLoop(config: FullConfigInternal): Promise<Full
   const dirtyTestFiles = new Map<FullProjectInternal, Set<string>>();
   const onDirtyTestFiles: { resolve?(): void } = {};
   const failedTestIdCollector = new Set<string>();
+  const projectNames: string[] = [];
 
   testServerConnection.onTestFilesChanged(({ testFiles }) => onTestFilesChanged(testFiles));
   testServerConnection.onReport(report => {
+    if (report.method === 'onProject') {
+      console.log(report);
+      // todo: store project information
+      projectNames.push();
+    }
     if (report.method === 'onTestEnd') {
       const { result: { status }, test: { testId, expectedStatus } } = report.params;
       if (status !== expectedStatus)
@@ -154,15 +167,15 @@ export async function runWatchModeLoop(config: FullConfigInternal): Promise<Full
     }
 
     if (command === 'project') {
-      const { projectNames } = await enquirer.prompt<{ projectNames: string[] }>({
+      const { selectedProjects } = await enquirer.prompt<{ selectedProjects: string[] }>({
         type: 'multiselect',
-        name: 'projectNames',
+        name: 'selectedProjects',
         message: 'Select projects',
-        choices: config.projects.map(p => ({ name: p.project.name })),
-      }).catch(() => ({ projectNames: null }));
-      if (!projectNames)
+        choices: projectNames,
+      }).catch(() => ({ selectedProjects: null }));
+      if (!selectedProjects)
         continue;
-      config.cliProjectFilter = projectNames.length ? projectNames : undefined;
+      options.projects = selectedProjects.length ? selectedProjects : undefined;
       await runTests(config, testServerConnection);
       lastRun = { type: 'regular' };
       continue;
@@ -177,9 +190,9 @@ export async function runWatchModeLoop(config: FullConfigInternal): Promise<Full
       if (filePattern === null)
         continue;
       if (filePattern.trim())
-        config.cliArgs = filePattern.split(' ');
+        options.files = filePattern.split(' ');
       else
-        config.cliArgs = [];
+        options.files = undefined;
       await runTests(config, testServerConnection);
       lastRun = { type: 'regular' };
       continue;
