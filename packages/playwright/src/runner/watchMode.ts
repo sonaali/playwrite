@@ -135,7 +135,7 @@ export async function runWatchModeLoop(config: FullConfigInternal, configLocatio
   let result: FullResult['status'] = 'passed';
 
   // Enter the watch loop.
-  await runTests(config, options, testServerConnection);
+  await runTests(options, testServerConnection);
 
   while (true) {
     printPrompt();
@@ -160,7 +160,7 @@ export async function runWatchModeLoop(config: FullConfigInternal, configLocatio
 
     if (command === 'run') {
       // All means reset filters.
-      await runTests(config, options, testServerConnection);
+      await runTests(options, testServerConnection);
       lastRun = { type: 'regular' };
       continue;
     }
@@ -175,7 +175,7 @@ export async function runWatchModeLoop(config: FullConfigInternal, configLocatio
       if (!selectedProjects)
         continue;
       options.projects = selectedProjects.length ? selectedProjects : undefined;
-      await runTests(config, options, testServerConnection);
+      await runTests(options, testServerConnection);
       lastRun = { type: 'regular' };
       continue;
     }
@@ -192,7 +192,7 @@ export async function runWatchModeLoop(config: FullConfigInternal, configLocatio
         options.files = filePattern.split(' ');
       else
         options.files = undefined;
-      await runTests(config, options, testServerConnection);
+      await runTests(options, testServerConnection);
       lastRun = { type: 'regular' };
       continue;
     }
@@ -209,26 +209,26 @@ export async function runWatchModeLoop(config: FullConfigInternal, configLocatio
         options.grep = testPattern;
       else
         options.grep = undefined;
-      await runTests(config, options, testServerConnection);
+      await runTests(options, testServerConnection);
       lastRun = { type: 'regular' };
       continue;
     }
 
     if (command === 'failed') {
       const failedTestIds = new Set(failedTestIdCollector);
-      await runTests(config, {}, testServerConnection, { title: 'running failed tests', testIds: [...failedTestIds] });
+      await runTests({}, testServerConnection, { title: 'running failed tests', testIds: [...failedTestIds] });
       lastRun = { type: 'failed', failedTestIds };
       continue;
     }
 
     if (command === 'repeat') {
       if (lastRun.type === 'regular') {
-        await runTests(config, options, testServerConnection, { title: 're-running tests' });
+        await runTests(options, testServerConnection, { title: 're-running tests' });
         continue;
       } else if (lastRun.type === 'changed') {
         await runChangedTests(config, options, testServerConnection, lastRun.dirtyTestFiles!, 're-running tests');
       } else if (lastRun.type === 'failed') {
-        await runTests(config, {}, testServerConnection, { title: 're-running tests', testIds: [...lastRun.failedTestIds!] });
+        await runTests({}, testServerConnection, { title: 're-running tests', testIds: [...lastRun.failedTestIds!] });
       }
       continue;
     }
@@ -268,21 +268,21 @@ async function runChangedTests(config: FullConfigInternal, watchOptions: WatchMo
   // If there are affected dependency projects, do the full run, respect the original CLI.
   // if there are no affected dependency projects, intersect CLI with dirty files
   const locations = affectsAnyDependency ? undefined : [...testFiles];
-  await runTests(config, { ...watchOptions, files: locations }, testServerConnection, { title: title || 'files changed' });
+  // todo: somehow intersect CLI with dirty files
+  await runTests({ ...watchOptions, files: locations }, testServerConnection, { title: title || 'files changed' });
 }
 
-async function runTests(config: FullConfigInternal, watchOptions: WatchModeOptions, testServerConnection: TestServerConnection, options?: {
+async function runTests(watchOptions: WatchModeOptions, testServerConnection: TestServerConnection, options?: {
     title?: string,
     testIds?: string[],
   }) {
-  printConfiguration(watchOptions, config, options?.title);
+  printConfiguration(watchOptions, options?.title);
 
   await testServerConnection.runTests({
     grep: watchOptions.grep,
-    grepInvert: config.cliGrepInvert,
     testIds: options?.testIds,
     locations: watchOptions?.files,
-    projects: config.cliProjectFilter,
+    projects: watchOptions.projects,
     connectWsEndpoint,
     reuseContext: connectWsEndpoint ? true : undefined,
     workers: connectWsEndpoint ? 1 : undefined,
@@ -368,14 +368,16 @@ let showBrowserServer: PlaywrightServer | undefined;
 let connectWsEndpoint: string | undefined = undefined;
 let seq = 0;
 
-function printConfiguration(options: WatchModeOptions, config: FullConfigInternal, title?: string) {
+function printConfiguration(options: WatchModeOptions, title?: string) {
   const packageManagerCommand = getPackageManagerExecCommand();
   const tokens: string[] = [];
   tokens.push(`${packageManagerCommand} playwright test`);
-  tokens.push(...(options.projects ?? []).map(p => colors.blue(`--project ${p}`)));
-  if (config.cliGrep)
-    tokens.push(colors.red(`--grep ${config.cliGrep}`));
-  tokens.push(...(options.files ?? []).map(a => colors.bold(a)));
+  if (options.projects)
+    tokens.push(...options.projects.map(p => colors.blue(`--project ${p}`)));
+  if (options.grep)
+    tokens.push(colors.red(`--grep ${options.grep}`));
+  if (options.files)
+    tokens.push(...options.files.map(a => colors.bold(a)));
   if (title)
     tokens.push(colors.dim(`(${title})`));
   if (seq)
