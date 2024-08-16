@@ -339,7 +339,7 @@ function printConfiguration(options: WatchModeOptions, title?: string) {
   ++seq;
   const lines: string[] = [];
   const sep = separator();
-  // lines.push('\x1Bc' + sep);
+  lines.push('\x1Bc' + sep);
   lines.push(`${tokens.join(' ')}`);
   lines.push(`${colors.dim('Show & reuse browser:')} ${colors.bold(showBrowserServer ? 'on' : 'off')}`);
   process.stdout.write(lines.join('\n'));
