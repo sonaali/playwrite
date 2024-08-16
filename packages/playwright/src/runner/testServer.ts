@@ -353,10 +353,12 @@ export class TestServerDispatcher implements TestServerInterface {
     config.cliProjectFilter = params.projects?.length ? params.projects : undefined;
     config.testIdMatcher = testIdSet ? id => testIdSet.has(id) : undefined;
 
+    const additionalFileMatcher = params.files ? (file: string) => params.files!.includes(file) : undefined;
+
     const reporters = await createReporters(config, 'test', true);
     const wireReporter = await this._wireReporter(e => this._dispatchEvent('report', e));
     reporters.push(wireReporter);
-    const taskRunner = createTaskRunnerForTestServer(config, reporters);
+    const taskRunner = createTaskRunnerForTestServer(config, reporters, additionalFileMatcher);
     const testRun = new TestRun(config);
     taskRunner.reporter.onConfigure(config.config);
     const stop = new ManualPromise();

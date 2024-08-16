@@ -15,6 +15,7 @@
  */
 
 import path from 'path';
+import timers from 'timers/promises';
 import { test, expect, playwrightCtConfigText } from './playwright-test-fixtures';
 
 test.describe.configure({ mode: 'parallel' });
@@ -545,7 +546,7 @@ test('should not trigger on changes to non-tests', async ({ runWatchTest, writeF
     `,
   });
 
-  await new Promise(f => setTimeout(f, 1000));
+  await timers.setTimeout(1000);
   expect(testProcess.output).not.toContain('Waiting for file changes.');
 });
 
@@ -603,12 +604,11 @@ test('should watch filtered files', async ({ runWatchTest, writeFiles }) => {
     `,
   });
 
-  await new Promise(f => setTimeout(f, 1000));
+  await timers.setTimeout(1000);
   expect(testProcess.output).not.toContain('Waiting for file changes.');
 });
 
-// broken because we have no way of intersecting cliArgs + changed files
-test.fail('should not watch unfiltered files', async ({ runWatchTest, writeFiles }) => {
+test('should not watch unfiltered files', async ({ runWatchTest, writeFiles }) => {
   const testProcess = await runWatchTest({
     'a.test.ts': `
       import { test, expect } from '@playwright/test';

@@ -74,16 +74,9 @@ export function createTaskRunnerForWatchSetup(config: FullConfigInternal, report
   return taskRunner;
 }
 
-export function createTaskRunnerForWatch(config: FullConfigInternal, reporters: ReporterV2[], additionalFileMatcher?: Matcher): TaskRunner<TestRun> {
+export function createTaskRunnerForTestServer(config: FullConfigInternal, reporters: ReporterV2[], additionalFileMatcher?: Matcher): TaskRunner<TestRun> {
   const taskRunner = TaskRunner.create<TestRun>(reporters);
   taskRunner.addTask('load tests', createLoadTask('out-of-process', { filterOnly: true, filterOnlyChanged: true, failOnLoadErrors: false, doNotRunDepsOutsideProjectFilter: true, additionalFileMatcher }));
-  addRunTasks(taskRunner, config);
-  return taskRunner;
-}
-
-export function createTaskRunnerForTestServer(config: FullConfigInternal, reporters: ReporterV2[]): TaskRunner<TestRun> {
-  const taskRunner = TaskRunner.create<TestRun>(reporters);
-  taskRunner.addTask('load tests', createLoadTask('out-of-process', { filterOnly: true, filterOnlyChanged: true, failOnLoadErrors: false, doNotRunDepsOutsideProjectFilter: true }));
   addRunTasks(taskRunner, config);
   return taskRunner;
 }

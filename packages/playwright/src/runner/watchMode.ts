@@ -15,11 +15,9 @@
  */
 
 import readline from 'readline';
+import path from 'path';
 import { createGuid, getPackageManagerExecCommand, ManualPromise } from 'playwright-core/lib/utils';
-import type { ConfigLocation, FullConfigInternal, FullProjectInternal } from '../common/config';
-import { createFileMatcher, createFileMatcherFromArguments } from '../util';
-import type { Matcher } from '../util';
-import { buildProjectsClosure, filterProjects } from './projectUtils';
+import type { ConfigLocation } from '../common/config';
 import type { FullResult } from '../../types/testReporter';
 import { colors } from 'playwright-core/lib/utilsBundle';
 import { enquirer } from '../utilsBundle';
@@ -50,7 +48,7 @@ interface WatchModeOptions {
   grep?: string;
 }
 
-export async function runWatchModeLoop(config: FullConfigInternal, configLocation: ConfigLocation, initialOptions: WatchModeOptions): Promise<FullResult['status']> {
+export async function runWatchModeLoop(configLocation: ConfigLocation, initialOptions: WatchModeOptions): Promise<FullResult['status']> {
   const options: WatchModeOptions = { ...initialOptions };
 
   const testServerDispatcher = new TestServerDispatcher(configLocation);
@@ -71,15 +69,33 @@ export async function runWatchModeLoop(config: FullConfigInternal, configLocatio
   const testServerConnection = new TestServerConnection(inMemorySocket);
   inMemorySocket.emit('open');
 
-  const dirtyTestFiles = new Map<FullProjectInternal, Set<string>>();
+  const dirtyTestFiles: string[] = [];
   const onDirtyTestFiles: { resolve?(): void } = {};
   const failedTestIdCollector = new Set<string>();
   const projectNames: string[] = [];
 
-  testServerConnection.onTestFilesChanged(({ testFiles }) => onTestFilesChanged(testFiles));
+  testServerConnection.onTestFilesChanged(async ({ testFiles: changedFiles }) => {
+    if (changedFiles.length === 0)
+      return;
+
+    const { report } = await testServerConnection.listTests({ locations: options.files, projects: options.projects, grep: options.grep });
+    const rootDir = report.find(r => r.method === 'onConfigure')!.params.config.rootDir;
+    for (const suite of report.find(r => r.method === 'onProject')!.params.project.suites) {
+      const suitePath = path.join(rootDir, suite.location.file);
+      if (changedFiles.includes(suitePath))
+        dirtyTestFiles.push(suitePath);
+    }
+
+    if (dirtyTestFiles.length === 0)
+      return;
+
+    onDirtyTestFiles.resolve?.();
+  });
   testServerConnection.onReport(report => {
-    if (report.method === 'onProject')
-      projectNames.push(report.params.project.name);
+    if (report.method === 'onProject') {
+      const { name } = report.params.project;
+      projectNames.push(name);
+    }
 
     if (report.method === 'onTestEnd') {
       const { result: { status }, test: { testId, expectedStatus } } = report.params;
@@ -96,42 +112,7 @@ export async function runWatchModeLoop(config: FullConfigInternal, configLocatio
   await testServerConnection.listTests({});
   await testServerConnection.watch({ fileNames: [] });
 
-  function onTestFilesChanged(testFiles: string[]) {
-    const commandLineFileMatcher = config.cliArgs.length ? createFileMatcherFromArguments(config.cliArgs) : () => true;
-    const projects = filterProjects(config.projects, config.cliProjectFilter);
-    const projectClosure = buildProjectsClosure(projects);
-    const projectFilters = new Map<FullProjectInternal, Matcher>();
-    for (const [project, type] of projectClosure) {
-      const testMatch = createFileMatcher(project.project.testMatch);
-      const testIgnore = createFileMatcher(project.project.testIgnore);
-      projectFilters.set(project, file => {
-        if (!file.startsWith(project.project.testDir) || !testMatch(file) || testIgnore(file))
-          return false;
-        return type === 'dependency' || commandLineFileMatcher(file);
-      });
-    }
-
-    let hasMatches = false;
-    for (const [project, filter] of projectFilters) {
-      const filteredFiles = testFiles.filter(filter);
-      if (!filteredFiles.length)
-        continue;
-      let set = dirtyTestFiles.get(project);
-      if (!set) {
-        set = new Set();
-        dirtyTestFiles.set(project, set);
-      }
-      filteredFiles.map(f => set!.add(f));
-      hasMatches = true;
-    }
-
-    if (!hasMatches)
-      return;
-
-    onDirtyTestFiles.resolve?.();
-  }
-
-  let lastRun: { type: 'changed' | 'regular' | 'failed', failedTestIds?: Set<string>, dirtyTestFiles?: Map<FullProjectInternal, Set<string>> } = { type: 'regular' };
+  let lastRun: { type: 'changed' | 'regular' | 'failed', failedTestIds?: Set<string>, dirtyTestFiles?: string[] } = { type: 'regular' };
   let result: FullResult['status'] = 'passed';
 
   // Enter the watch loop.
@@ -150,11 +131,8 @@ export async function runWatchModeLoop(config: FullConfigInternal, configLocatio
     const command = await readCommandPromise;
 
     if (command === 'changed') {
-      const copyOfDirtyTestFiles = new Map(dirtyTestFiles);
-      dirtyTestFiles.clear();
-      // Resolve files that depend on the changed files.
-      await runChangedTests(config, options, testServerConnection, copyOfDirtyTestFiles);
-      lastRun = { type: 'changed', dirtyTestFiles: copyOfDirtyTestFiles };
+      await runChangedTests(options, testServerConnection, dirtyTestFiles);
+      lastRun = { type: 'changed', dirtyTestFiles: [...dirtyTestFiles] };
       continue;
     }
 
@@ -226,7 +204,7 @@ export async function runWatchModeLoop(config: FullConfigInternal, configLocatio
         await runTests(options, testServerConnection, { title: 're-running tests' });
         continue;
       } else if (lastRun.type === 'changed') {
-        await runChangedTests(config, options, testServerConnection, lastRun.dirtyTestFiles!, 're-running tests');
+        await runChangedTests(options, testServerConnection, lastRun.dirtyTestFiles!, 're-running tests');
       } else if (lastRun.type === 'failed') {
         await runTests({}, testServerConnection, { title: 're-running tests', testIds: [...lastRun.failedTestIds!] });
       }
@@ -253,28 +231,14 @@ export async function runWatchModeLoop(config: FullConfigInternal, configLocatio
 }
 
 
-async function runChangedTests(config: FullConfigInternal, watchOptions: WatchModeOptions, testServerConnection: TestServerConnection, filesByProject: Map<FullProjectInternal, Set<string>>, title?: string) {
-  const testFiles = new Set<string>();
-  for (const files of filesByProject.values())
-    files.forEach(f => testFiles.add(f));
-
-  // Collect all the affected projects, follow project dependencies.
-  // Prepare to exclude all the projects that do not depend on this file, as if they did not exist.
-  const projects = filterProjects(config.projects, config.cliProjectFilter);
-  const projectClosure = buildProjectsClosure(projects);
-  const affectedProjects = affectedProjectsClosure([...projectClosure.keys()], [...filesByProject.keys()]);
-  const affectsAnyDependency = [...affectedProjects].some(p => projectClosure.get(p) === 'dependency');
-
-  // If there are affected dependency projects, do the full run, respect the original CLI.
-  // if there are no affected dependency projects, intersect CLI with dirty files
-  const locations = affectsAnyDependency ? undefined : [...testFiles];
-  // todo: somehow intersect CLI with dirty files
-  await runTests({ ...watchOptions, files: locations }, testServerConnection, { title: title || 'files changed' });
+async function runChangedTests(watchOptions: WatchModeOptions, testServerConnection: TestServerConnection, changedFiles: string[], title?: string) {
+  await runTests(watchOptions, testServerConnection, { title: title || 'files changed', changedFiles });
 }
 
 async function runTests(watchOptions: WatchModeOptions, testServerConnection: TestServerConnection, options?: {
     title?: string,
     testIds?: string[],
+  changedFiles?: string[],
   }) {
   printConfiguration(watchOptions, options?.title);
 
@@ -282,27 +246,13 @@ async function runTests(watchOptions: WatchModeOptions, testServerConnection: Te
     grep: watchOptions.grep,
     testIds: options?.testIds,
     locations: watchOptions?.files,
+    files: options?.changedFiles,
     projects: watchOptions.projects,
     connectWsEndpoint,
     reuseContext: connectWsEndpoint ? true : undefined,
     workers: connectWsEndpoint ? 1 : undefined,
     headed: connectWsEndpoint ? true : undefined,
   });
-}
-
-function affectedProjectsClosure(projectClosure: FullProjectInternal[], affected: FullProjectInternal[]): Set<FullProjectInternal> {
-  const result = new Set<FullProjectInternal>(affected);
-  for (let i = 0; i < projectClosure.length; ++i) {
-    for (const p of projectClosure) {
-      for (const dep of p.deps) {
-        if (result.has(dep))
-          result.add(p);
-      }
-      if (p.teardown && result.has(p.teardown))
-        result.add(p);
-    }
-  }
-  return result;
 }
 
 function readCommand(): ManualPromise<Command> {

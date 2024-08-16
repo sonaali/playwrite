@@ -135,7 +135,6 @@ export class Runner {
     const config = this._config;
     webServerPluginsForConfig(config).forEach(p => config.plugins.push({ factory: p }));
     return await runWatchModeLoop(
-        config,
         { configDir: config.configDir, resolvedConfigFile: config.config.configFile },
         { projects: config.cliProjectFilter, files: config.cliArgs, grep: config.cliGrep }
     );

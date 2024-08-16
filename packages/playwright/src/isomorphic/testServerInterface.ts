@@ -88,6 +88,7 @@ export interface TestServerInterface {
 
   runTests(params: {
     locations?: string[];
+    files?: string[]; // todo: find a better name. this is like locations, without pattern matching and without line numbers.
     grep?: string;
     grepInvert?: string;
     testIds?: string[];
