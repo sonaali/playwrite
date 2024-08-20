@@ -352,7 +352,7 @@ ${colors.dim('Waiting for file changes. Press')} ${colors.bold('enter')} ${color
 `);
 }
 
-async function toggleShowBrowser(): Promise<string | undefined> {
+async function toggleShowBrowser() {
   if (!showBrowserServer) {
     showBrowserServer = new PlaywrightServer({ mode: 'extension', path: '/' + createGuid(), maxConnections: 1 });
     connectWsEndpoint = await showBrowserServer.listen();
@@ -362,7 +362,6 @@ async function toggleShowBrowser(): Promise<string | undefined> {
     showBrowserServer = undefined;
     connectWsEndpoint = undefined;
     process.stdout.write(`${colors.dim('Show & reuse browser:')} ${colors.bold('off')}\n`);
-    return undefined;
   }
 }
 
