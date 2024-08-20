@@ -107,11 +107,10 @@ export async function runWatchModeLoop(configLocation: ConfigLocation, initialOp
     }
   });
 
-  await testServerConnection.initialize({ interceptStdio: false });
+  await testServerConnection.initialize({ interceptStdio: false, watchTestDirs: true });
   await testServerConnection.runGlobalSetup({});
 
   await testServerConnection.listTests({ locations: options.files, projects: options.projects, grep: options.grep, onlyChanged: options.onlyChanged });
-  await testServerConnection.watch({ fileNames: [] });
 
   let lastRun: { type: 'changed' | 'regular' | 'failed', failedTestIds?: Set<string>, dirtyTestFiles?: string[] } = { type: 'regular' };
   let result: FullResult['status'] = 'passed';
