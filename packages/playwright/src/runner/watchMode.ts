@@ -73,7 +73,7 @@ export async function runWatchModeLoop(configLocation: ConfigLocation, initialOp
   const dirtyTestFiles: string[] = [];
   const onDirtyTestFiles: { resolve?(): void } = {};
   const failedTestIdCollector = new Set<string>();
-  const projectNames: string[] = [];
+  const projectNames = new Set<string>();
 
   testServerConnection.onTestFilesChanged(async ({ testFiles: changedFiles }) => {
     if (changedFiles.length === 0)
@@ -95,7 +95,7 @@ export async function runWatchModeLoop(configLocation: ConfigLocation, initialOp
   testServerConnection.onReport(report => {
     if (report.method === 'onProject') {
       const { name } = report.params.project;
-      projectNames.push(name);
+      projectNames.add(name);
     }
 
     if (report.method === 'onTestEnd') {
@@ -149,7 +149,7 @@ export async function runWatchModeLoop(configLocation: ConfigLocation, initialOp
         type: 'multiselect',
         name: 'selectedProjects',
         message: 'Select projects',
-        choices: projectNames,
+        choices: [...projectNames],
       }).catch(() => ({ selectedProjects: null }));
       if (!selectedProjects)
         continue;
