@@ -26,6 +26,7 @@ import { PlaywrightServer } from 'playwright-core/lib/remote/playwrightServer';
 import { TestServerDispatcher } from './testServer';
 import { EventEmitter } from 'stream';
 import { type TestServerSocket, TestServerConnection } from '../isomorphic/testServerConnection';
+import { createFileMatcherFromArguments } from '../util';
 
 class InMemoryServerSocket extends EventEmitter implements TestServerSocket {
   public readonly send: (data: string) => void;
@@ -79,7 +80,7 @@ export async function runWatchModeLoop(configLocation: ConfigLocation, initialOp
     if (changedFiles.length === 0)
       return;
 
-    const { report } = await testServerConnection.listTests({ locations: options.files, projects: options.projects, grep: options.grep, onlyChanged: options.onlyChanged });
+    const { report } = await testServerConnection.listTests({ locations: options.files, projects: options.projects, grep: options.grep });
     const rootDir = report.find(r => r.method === 'onConfigure')!.params.config.rootDir;
     for (const suite of report.find(r => r.method === 'onProject')!.params.project.suites) {
       const suitePath = path.join(rootDir, suite.location.file);
@@ -110,7 +111,7 @@ export async function runWatchModeLoop(configLocation: ConfigLocation, initialOp
   await testServerConnection.initialize({ interceptStdio: false, watchTestDirs: true });
   await testServerConnection.runGlobalSetup({});
 
-  await testServerConnection.listTests({ locations: options.files, projects: options.projects, grep: options.grep, onlyChanged: options.onlyChanged });
+  await testServerConnection.listTests({ locations: options.files, projects: options.projects, grep: options.grep });
 
   let lastRun: { type: 'changed' | 'regular' | 'failed', failedTestIds?: Set<string>, dirtyTestFiles?: string[] } = { type: 'regular' };
   let result: FullResult['status'] = 'passed';
@@ -232,23 +233,24 @@ export async function runWatchModeLoop(configLocation: ConfigLocation, initialOp
 
 
 async function runChangedTests(watchOptions: WatchModeOptions, testServerConnection: TestServerConnection, changedFiles: string[], title?: string) {
-  await runTests(watchOptions, testServerConnection, { title: title || 'files changed', changedFiles });
+  if (watchOptions.files?.length)
+    changedFiles = changedFiles.filter(createFileMatcherFromArguments(watchOptions.files));
+
+  await runTests(watchOptions, testServerConnection, { title: title || 'files changed', locations: changedFiles });
 }
 
 async function runTests(watchOptions: WatchModeOptions, testServerConnection: TestServerConnection, options?: {
     title?: string,
     testIds?: string[],
-  changedFiles?: string[],
+    locations?: string[],
   }) {
   printConfiguration(watchOptions, options?.title);
 
   await testServerConnection.runTests({
     grep: watchOptions.grep,
     testIds: options?.testIds,
-    locations: watchOptions?.files,
-    files: options?.changedFiles,
+    locations: options?.locations ?? watchOptions?.files,
     projects: watchOptions.projects,
-    onlyChanged: watchOptions.onlyChanged,
     connectWsEndpoint,
     reuseContext: connectWsEndpoint ? true : undefined,
     workers: connectWsEndpoint ? 1 : undefined,
