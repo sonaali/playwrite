@@ -74,7 +74,6 @@ export async function runWatchModeLoop(configLocation: ConfigLocation, initialOp
   const dirtyTestFiles: string[] = [];
   const onDirtyTestFiles: { resolve?(): void } = {};
   const failedTestIdCollector = new Set<string>();
-  const projectNames = new Set<string>();
 
   testServerConnection.onTestFilesChanged(async ({ testFiles: changedFiles }) => {
     if (changedFiles.length === 0)
@@ -94,11 +93,6 @@ export async function runWatchModeLoop(configLocation: ConfigLocation, initialOp
     onDirtyTestFiles.resolve?.();
   });
   testServerConnection.onReport(report => {
-    if (report.method === 'onProject') {
-      const { name } = report.params.project;
-      projectNames.add(name);
-    }
-
     if (report.method === 'onTestEnd') {
       const { result: { status }, test: { testId, expectedStatus } } = report.params;
       if (status !== expectedStatus)
@@ -111,7 +105,8 @@ export async function runWatchModeLoop(configLocation: ConfigLocation, initialOp
   await testServerConnection.initialize({ interceptStdio: false, watchTestDirs: true });
   await testServerConnection.runGlobalSetup({});
 
-  await testServerConnection.listTests({ locations: options.files, projects: options.projects, grep: options.grep });
+  const { report } = await testServerConnection.listTests({ locations: options.files, projects: options.projects, grep: options.grep });
+  const projectNames = report.filter(r => r.method === 'onProject').map(r => r.params.project.name);
 
   let lastRun: { type: 'changed' | 'regular' | 'failed', failedTestIds?: Set<string>, dirtyTestFiles?: string[] } = { type: 'regular' };
   let result: FullResult['status'] = 'passed';
@@ -149,7 +144,7 @@ export async function runWatchModeLoop(configLocation: ConfigLocation, initialOp
         type: 'multiselect',
         name: 'selectedProjects',
         message: 'Select projects',
-        choices: [...projectNames],
+        choices: projectNames,
       }).catch(() => ({ selectedProjects: null }));
       if (!selectedProjects)
         continue;
