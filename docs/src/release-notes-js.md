@@ -8,9 +8,15 @@ import LiteYouTube from '@site/src/components/LiteYouTube';
 
 ## Version 1.46
 
+<LiteYouTube
+  id="tQo7w-QQBsI"
+  title="Playwright 1.46"
+/>
+
+
 ### TLS Client Certificates
 
-Playwright now allows to supply client-side certificates, so that server can verify them, as specified by TLS Client Authentication.
+Playwright now allows you to supply client-side certificates, so that server can verify them, as specified by TLS Client Authentication.
 
 The following snippet sets up a client certificate for `https://example.com`:
 
@@ -35,14 +41,14 @@ You can also provide client certificates to a particular [test project](./api/cl
 
 ### `--only-changed` cli option
 
-New CLI option `--only-changed` allows to only run test files that have been changed since the last git commit or from a specific git "ref".
+New CLI option `--only-changed` will only run test files that have been changed since the last git commit or from a specific git "ref". This will also run all test files that import any changed files.
 
 ```sh
 # Only run test files with uncommitted changes
 npx playwright test --only-changed
 
 # Only run test files changed relative to the "main" branch
-npx playwrigh test --only-changed=main
+npx playwright test --only-changed=main
 ```
 
 ### Component Testing: New `router` fixture
