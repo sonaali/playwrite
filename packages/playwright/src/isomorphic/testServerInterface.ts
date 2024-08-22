@@ -81,7 +81,6 @@ export interface TestServerInterface {
     locations?: string[];
     grep?: string;
     grepInvert?: string;
-    onlyChanged?: string;
   }): Promise<{
     report: ReportEntry[],
     status: reporterTypes.FullResult['status']
@@ -104,7 +103,6 @@ export interface TestServerInterface {
     projects?: string[];
     reuseContext?: boolean;
     connectWsEndpoint?: string;
-    onlyChanged?: string;
   }): Promise<{
     status: reporterTypes.FullResult['status'];
   }>;

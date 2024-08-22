@@ -273,7 +273,6 @@ export class TestServerDispatcher implements TestServerInterface {
     config.cliGrepInvert = params.grepInvert;
     config.cliProjectFilter = params.projects?.length ? params.projects : undefined;
     config.cliListOnly = true;
-    config.cliOnlyChanged = params.onlyChanged;
 
     const { collectingReporter, report } = await this._collectingReporter();
     const taskRunner = createTaskRunnerForList(config, [collectingReporter], 'out-of-process', { failOnLoadErrors: false });
@@ -353,7 +352,6 @@ export class TestServerDispatcher implements TestServerInterface {
     config.cliGrepInvert = params.grepInvert;
     config.cliProjectFilter = params.projects?.length ? params.projects : undefined;
     config.testIdMatcher = testIdSet ? id => testIdSet.has(id) : undefined;
-    config.cliOnlyChanged = params.onlyChanged;
 
     const additionalFileMatcher = params.files ? (file: string) => params.files!.includes(file) : undefined;
 
