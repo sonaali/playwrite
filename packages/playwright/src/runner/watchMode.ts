@@ -27,6 +27,7 @@ import { TestServerDispatcher } from './testServer';
 import { EventEmitter } from 'stream';
 import { type TestServerSocket, TestServerConnection } from '../isomorphic/testServerConnection';
 import { createFileMatcherFromArguments } from '../util';
+import { TeleSuiteUpdater } from '../isomorphic/teleSuiteUpdater';
 
 class InMemoryServerSocket extends EventEmitter implements TestServerSocket {
   public readonly send: (data: string) => void;
@@ -71,20 +72,23 @@ export async function runWatchModeLoop(configLocation: ConfigLocation, initialOp
   const testServerConnection = new TestServerConnection(inMemorySocket);
   inMemorySocket.emit('open');
 
-  const dirtyTestFiles: string[] = [];
+  const telesuiteUpdater = new TeleSuiteUpdater({ pathSeparator: path.sep, onUpdate() { } });
+
+  const dirtyTestFiles: string[] = []; // we're never clearing this! seems wrong.
   const onDirtyTestFiles: { resolve?(): void } = {};
-  const failedTestIdCollector = new Set<string>();
 
   testServerConnection.onTestFilesChanged(async ({ testFiles: changedFiles }) => {
     if (changedFiles.length === 0)
       return;
 
     const { report } = await testServerConnection.listTests({ locations: options.files, projects: options.projects, grep: options.grep });
-    const rootDir = report.find(r => r.method === 'onConfigure')!.params.config.rootDir;
-    for (const suite of report.find(r => r.method === 'onProject')!.params.project.suites) {
-      const suitePath = path.join(rootDir, suite.location.file);
-      if (changedFiles.includes(suitePath))
-        dirtyTestFiles.push(suitePath);
+    telesuiteUpdater.processListReport(report);
+
+    for (const project of telesuiteUpdater.rootSuite!.suites) {
+      for (const suite of project.suites) {
+        if (suite.location?.file && changedFiles.includes(suite.location.file))
+          dirtyTestFiles.push(suite.location.file);
+      }
     }
 
     if (dirtyTestFiles.length === 0)
@@ -92,23 +96,16 @@ export async function runWatchModeLoop(configLocation: ConfigLocation, initialOp
 
     onDirtyTestFiles.resolve?.();
   });
-  testServerConnection.onReport(report => {
-    if (report.method === 'onTestEnd') {
-      const { result: { status }, test: { testId, expectedStatus } } = report.params;
-      if (status !== expectedStatus)
-        failedTestIdCollector.add(testId);
-      else
-        failedTestIdCollector.delete(testId);
-    }
-  });
+  testServerConnection.onReport(report => telesuiteUpdater.processTestReportEvent(report));
 
   await testServerConnection.initialize({ interceptStdio: false, watchTestDirs: true });
   await testServerConnection.runGlobalSetup({});
 
   const { report } = await testServerConnection.listTests({ locations: options.files, projects: options.projects, grep: options.grep });
+  telesuiteUpdater.processListReport(report);
   const projectNames = report.filter(r => r.method === 'onProject').map(r => r.params.project.name);
 
-  let lastRun: { type: 'changed' | 'regular' | 'failed', failedTestIds?: Set<string>, dirtyTestFiles?: string[] } = { type: 'regular' };
+  let lastRun: { type: 'changed' | 'regular' | 'failed', failedTestIds?: string[], dirtyTestFiles?: string[] } = { type: 'regular' };
   let result: FullResult['status'] = 'passed';
 
   // Enter the watch loop.
@@ -189,8 +186,8 @@ export async function runWatchModeLoop(configLocation: ConfigLocation, initialOp
     }
 
     if (command === 'failed') {
-      const failedTestIds = new Set(failedTestIdCollector);
-      await runTests({}, testServerConnection, { title: 'running failed tests', testIds: [...failedTestIds] });
+      const failedTestIds = telesuiteUpdater.rootSuite!.allTests().filter(t => !t.ok()).map(t => t.id);
+      await runTests({}, testServerConnection, { title: 'running failed tests', testIds: failedTestIds });
       lastRun = { type: 'failed', failedTestIds };
       continue;
     }

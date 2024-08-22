@@ -14,11 +14,24 @@
  * limitations under the License.
  */
 
-import { TeleReporterReceiver, TeleSuite } from '@testIsomorphic/teleReceiver';
-import { statusEx } from '@testIsomorphic/testTree';
-import type { ReporterV2 } from 'playwright/src/reporters/reporterV2';
-import type * as reporterTypes from 'playwright/types/testReporter';
-import type { Progress, TestModel } from './uiModeModel';
+import { TeleReporterReceiver, TeleSuite } from './teleReceiver';
+import { statusEx } from './testTree';
+import type { ReporterV2 } from '../reporters/reporterV2';
+import type * as reporterTypes from '../../types/testReporter';
+
+export type TeleSuiteProgress = {
+  total: number;
+  passed: number;
+  failed: number;
+  skipped: number;
+};
+
+export type TestModel = {
+  config: reporterTypes.FullConfig;
+  rootSuite: reporterTypes.Suite;
+  loadErrors: reporterTypes.TestError[];
+  progress: TeleSuiteProgress;
+};
 
 export type TeleSuiteUpdaterOptions = {
   onUpdate: (force?: boolean) => void,
@@ -30,7 +43,7 @@ export class TeleSuiteUpdater {
   rootSuite: TeleSuite | undefined;
   config: reporterTypes.FullConfig | undefined;
   readonly loadErrors: reporterTypes.TestError[] = [];
-  readonly progress: Progress = {
+  readonly progress: TeleSuiteProgress = {
     total: 0,
     passed: 0,
     failed: 0,
@@ -134,7 +147,7 @@ export class TeleSuiteUpdater {
       onError: (error: reporterTypes.TestError) => this._handleOnError(error)
     });
     for (const message of report)
-      receiver.dispatch(message);
+      void receiver.dispatch(message);
   }
 
   processListReport(report: any[]) {
@@ -144,7 +157,7 @@ export class TeleSuiteUpdater {
     this._testResultsSnapshot = new Map(tests.map(test => [test.id, test.results]));
     this._receiver.reset();
     for (const message of report)
-      this._receiver.dispatch(message);
+      void this._receiver.dispatch(message);
   }
 
   processTestReportEvent(message: any) {
